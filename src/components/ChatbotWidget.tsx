@@ -152,6 +152,7 @@ export default function ChatbotWidget({
         content: result.answer || fallbackMsg,
         needsHumanHandoff: result.needsHumanHandoff,
         sources: result.sources,
+        suggestedQuestions: result.suggestedQuestions,
       };
 
       setMessages((current) => [...current, assistantMessage]);

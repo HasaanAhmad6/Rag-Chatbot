@@ -2,6 +2,16 @@
 
 All notable changes to `@hasaan_6/rag-chatbot-widget` are documented in this file.
 
+## [0.2.9] - 2026-06-30
+
+### Added
+- **Dynamic Related/Follow-Up Questions**: Configured the RAG pipeline to instruct the LLM to output 2-3 relevant follow-up questions at the end of its response inside specific XML tags. Added a parser in `ragPipeline.ts` to extract and clean these questions from the raw answer.
+- **Interactive Follow-Up Pills**: Updated `ChatWindow.tsx` to render these dynamic follow-up questions as clickable pills directly below the most recent assistant message. Clicking a pill automatically submits that question to the assistant.
+- **Dynamic Suggestion Styles**: Added borders, backgrounds, and hover animations for `.chatbot-suggested-questions` and `.chatbot-suggested-question` inside `chatbot.css`.
+
+### Changed
+- **Type Consolidation**: Moved `DocumentChunk`, `RagPipelineConfig`, and `RagPipelineResult` definitions into the centralized `types.ts` module, updating imports in `ragPipeline.ts` to prevent duplicate type declarations.
+
 ## [0.2.8] - 2026-06-30
 
 ### Added

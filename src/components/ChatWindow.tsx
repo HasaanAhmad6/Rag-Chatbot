@@ -73,6 +73,21 @@ export function ChatWindow({
 
         {loading && <TypingIndicator />}
 
+        {!loading && messages.length > 0 && messages[messages.length - 1].role === "assistant" && messages[messages.length - 1].suggestedQuestions && (
+          <div className="chatbot-suggested-questions">
+            {messages[messages.length - 1].suggestedQuestions!.map((question) => (
+              <button
+                key={question}
+                type="button"
+                onClick={() => onQuickAction(question)}
+                className="chatbot-suggested-question"
+              >
+                {question}
+              </button>
+            ))}
+          </div>
+        )}
+
         {children}
       </div>
 

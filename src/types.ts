@@ -12,6 +12,7 @@ export type ChatMessage = {
   content: string;
   sources?: ChatSource[];
   needsHumanHandoff?: boolean;
+  suggestedQuestions?: string[];
 };
 
 export type LeadFormValues = {
@@ -67,6 +68,7 @@ export type LLMAdapterInput = {
 export type LLMAdapterOutput = {
   answer: string;
   needsHumanHandoff?: boolean;
+  suggestedQuestions?: string[];
 };
 
 export type EmbeddingAdapter = (text: string) => Promise<number[]>;
@@ -97,4 +99,5 @@ export type RagPipelineResult = {
   answer: string;
   sources: Array<{ title: string; url?: string; similarity: number }>;
   needsHumanHandoff: boolean;
+  suggestedQuestions?: string[];
 };

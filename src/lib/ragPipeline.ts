@@ -1,33 +1,7 @@
 import type { ConversationTurn, EmbeddingAdapter, LLMAdapter } from "./adapters";
+import type { DocumentChunk, RagPipelineConfig, RagPipelineResult } from "../types";
 
-export type { ConversationTurn };
-
-export type DocumentChunk = {
-  id: string;
-  content: string;
-  metadata: {
-    title?: string;
-    url?: string;
-    [key: string]: unknown;
-  };
-  similarity: number;
-};
-
-export type RagPipelineConfig = {
-  embeddingAdapter: EmbeddingAdapter;
-  llmAdapter: LLMAdapter;
-  supabaseUrl: string;
-  supabaseAnonKey: string;
-  matchCount?: number;
-  matchThreshold?: number;
-  conversationWindow?: number;
-};
-
-export type RagPipelineResult = {
-  answer: string;
-  sources: Array<{ title: string; url?: string; similarity: number }>;
-  needsHumanHandoff: boolean;
-};
+export type { ConversationTurn, DocumentChunk, RagPipelineConfig, RagPipelineResult };
 
 async function searchDocuments(
   embedding: number[],
@@ -87,6 +61,13 @@ function buildSystemPrompt(chunks: DocumentChunk[]): string {
     "2. Avoid using robotic or clinical framing phrases. NEVER start answers with 'Based on the context...', 'According to the context...', 'The context states that...', or 'According to the provided text...'. Just speak naturally and directly.",
     "3. Respond to simple greetings, politeness, and general chit-chat (e.g. 'hello', 'hi', 'how are you', 'thank you') in a warm, welcoming manner without using context or referring to it.",
     "4. If the context does not contain enough information to answer a factual question about Hasaan, reply politely explaining that you do not have that specific information.",
+    "5. After your response, you MUST generate 2 or 3 short, relevant follow-up questions that the user might want to ask next.",
+    "   You MUST wrap these follow-up questions strictly in XML tags at the very end of your response like this:",
+    "   <suggestions>",
+    "     <suggest>What is Hasaan's experience in React?</suggest>",
+    "     <suggest>Can you show me Hasaan's featured projects?</suggest>",
+    "   </suggestions>",
+    "   Ensure the questions are short, natural, and directly related to the user's query or your response.",
     "",
     "Context:",
     context,
@@ -133,5 +114,26 @@ export async function runRagPipeline(
     similarity: chunk.similarity,
   }));
 
-  return { answer: answer || "", sources, needsHumanHandoff };
+  let cleanAnswer = answer || "";
+  let suggestedQuestions: string[] = [];
+
+  const suggestionsMatch = cleanAnswer.match(/<suggestions>([\s\S]*?)<\/suggestions>/i);
+  if (suggestionsMatch) {
+    const rawSuggestions = suggestionsMatch[1];
+    cleanAnswer = cleanAnswer.replace(/<suggestions>[\s\S]*?<\/suggestions>/gi, "").trim();
+
+    const suggestMatches = rawSuggestions.match(/<suggest>([\s\S]*?)<\/suggest>/gi);
+    if (suggestMatches) {
+      suggestedQuestions = suggestMatches.map((m) =>
+        m.replace(/<\/?suggest>/gi, "").trim()
+      );
+    }
+  }
+
+  return {
+    answer: cleanAnswer || "",
+    sources,
+    needsHumanHandoff,
+    suggestedQuestions: suggestedQuestions.length > 0 ? suggestedQuestions : undefined,
+  };
 }

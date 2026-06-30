@@ -301,6 +301,35 @@
   background: color-mix(in srgb, var(--chatbot-primary) 4%, var(--chatbot-bg));
 }
 
+.chatbot-suggested-questions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding-left: 0.5rem;
+}
+
+.chatbot-suggested-question {
+  border: 1px solid var(--chatbot-primary);
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--chatbot-primary) 5%, var(--chatbot-bg));
+  color: var(--chatbot-primary);
+  cursor: pointer;
+  font-size: 0.825rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  text-align: left;
+  line-height: 1.2;
+  transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.chatbot-suggested-question:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--chatbot-primary) 12%, var(--chatbot-bg));
+  border-color: var(--chatbot-primary-strong);
+}
+
 .chatbot-message-row {
   display: flex;
 }
