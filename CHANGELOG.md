@@ -2,6 +2,11 @@
 
 All notable changes to `@hasaan_6/rag-chatbot-widget` are documented in this file.
 
+## [0.2.5] - 2026-06-30
+
+### Fixed
+- Updated `match_documents` SQL definition inside `supabaseSetup.ts` to perform explicit `halfvec(3072)` casts. This ensures the pgvector HNSW index is successfully matched and used by the PostgreSQL query planner instead of reverting to a full table sequential scan.
+
 ## [0.2.4] - 2026-06-30
 
 ### Added
