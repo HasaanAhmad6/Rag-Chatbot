@@ -2,6 +2,15 @@
 
 All notable changes to `@hasaan_6/rag-chatbot-widget` are documented in this file.
 
+## [0.2.7] - 2026-06-30
+
+### Added
+- **Backend Email Notifications**: Added README guides showing developers how to handle lead captures securely on their server using webhooks (Discord/Slack) or email APIs (Resend/Nodemailer).
+- **CSS Variable Definitions**: Listed all theme CSS variable names in the documentation to make it easy for developers to customize and override the widget branding colors inside their own websites.
+
+### Changed
+- **Documentation Overhaul**: Completely rewrote the `README.md` to document the secure proxy-architecture, separate client/server installation imports, and supply the corrected SQL index cast queries.
+
 ## [0.2.6] - 2026-06-30
 
 ### Added
