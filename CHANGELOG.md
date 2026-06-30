@@ -2,6 +2,19 @@
 
 All notable changes to `@hasaan_6/rag-chatbot-widget` are documented in this file.
 
+## [0.2.4] - 2026-06-30
+
+### Added
+- Dedicated backend RAG entrypoint `src/server.ts` that exports pipeline execution, ingestion functions, and model adapter factories.
+- Centralized `src/types.ts` type module to prevent circular dependency cycles.
+- Multi-target compile configuration in `tsup.config.ts` to separate client React code from Node server modules.
+
+### Changed
+- Refactored `ChatbotWidget.tsx` props to accept a safe, decoupled `chatEndpoint` parameter instead of loading private API keys and database credentials in the browser bundle.
+- Replaced insecure context runtime UUID dependencies with a robust, browser-safe fallback UUID generator in `ChatbotWidget.tsx`.
+- Refactored `index.ts` to export client-side only React components and properties.
+- Removed the `useEffect` hook that reset chat history on parent re-renders.
+
 ## [0.2.3] - 2026-06-23
 
 ### Added
