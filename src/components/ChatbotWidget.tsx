@@ -146,6 +146,7 @@ export default function ChatbotWidget({
   }
 
   async function submitQuestion(question: string) {
+    let assistantMsgId: string | null = null;
     const trimmedQuestion = question.trim();
     if (!trimmedQuestion || loading) {
       return;
@@ -176,10 +177,10 @@ export default function ChatbotWidget({
       }
 
       if (stream && response.body) {
-        const assistantMsgId = safeUUID();
+        assistantMsgId = safeUUID();
         setMessages((current) => [
           ...current,
-          { id: assistantMsgId, role: "assistant", content: "" }
+          { id: assistantMsgId as string, role: "assistant", content: "" }
         ]);
 
         const reader = response.body.getReader();
@@ -249,15 +250,31 @@ export default function ChatbotWidget({
       }
     } catch (err) {
       console.error("[ChatbotWidget Error]", err);
-      setMessages((current) => [
-        ...current,
-        {
-          id: safeUUID(),
-          role: "assistant",
-          content: fallbackMsg,
-          needsHumanHandoff: true,
-        },
-      ]);
+      if (assistantMsgId) {
+        setMessages((current) =>
+          current.map((msg) =>
+            msg.id === assistantMsgId
+              ? {
+                  ...msg,
+                  content: msg.content
+                    ? `${msg.content} ... [Connection lost. Please try again.]`
+                    : fallbackMsg,
+                  needsHumanHandoff: true,
+                }
+              : msg
+          )
+        );
+      } else {
+        setMessages((current) => [
+          ...current,
+          {
+            id: safeUUID(),
+            role: "assistant",
+            content: fallbackMsg,
+            needsHumanHandoff: true,
+          },
+        ]);
+      }
       setLeadFormOpen(true);
     } finally {
       setLoading(false);

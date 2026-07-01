@@ -1,4 +1,7 @@
 import type { EmbeddingAdapter, LLMAdapter, LLMStreamAdapter, LLMAdapterInput, ConversationTurn } from "./adapters";
+import { fetchWithRetry } from "./utils";
+
+const fetch = fetchWithRetry;
 
 /** Gemini gemini-embedding-001 (3072 dimensions by default; supports outputDimensionality 128–3072) */
 export function createGeminiEmbeddingAdapter(apiKey: string): EmbeddingAdapter {

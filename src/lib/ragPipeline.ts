@@ -61,7 +61,7 @@ export async function runRagPipeline(
   } = config;
 
   const embedding = await embeddingAdapter(question);
-  const chunks = await vectorStore(embedding, { matchCount, matchThreshold });
+  const chunks = await vectorStore(embedding, { matchCount, matchThreshold, question });
 
   if (chunks.length === 0) {
     return { answer: "", sources: [], needsHumanHandoff: true };
@@ -199,7 +199,7 @@ export async function runRagPipelineStream(
   } = config;
 
   const embedding = await embeddingAdapter(question);
-  const chunks = await vectorStore(embedding, { matchCount, matchThreshold });
+  const chunks = await vectorStore(embedding, { matchCount, matchThreshold, question });
 
   const sources = chunks.slice(0, 8).map((chunk) => ({
     title: chunk.metadata?.title ?? "Source",

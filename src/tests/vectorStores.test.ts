@@ -42,5 +42,17 @@ describe("Vector Stores", () => {
       const results = await store(query, { matchCount: 1, matchThreshold: 0.1 });
       expect(results).toHaveLength(1);
     });
+
+    it("should fall back to keyword query matching if vector search yields 0 matches", async () => {
+      const store = createMemoryVectorStore(docs);
+      const query = [0, 0, 1]; // Orthogonal query (vector search yields 0 results)
+      const results = await store(query, {
+        matchCount: 5,
+        matchThreshold: 0.8,
+        question: "Tell me about Node.js runtime environment",
+      });
+      expect(results).toHaveLength(1);
+      expect(results[0].metadata.title).toBe("Node");
+    });
   });
 });

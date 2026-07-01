@@ -90,7 +90,7 @@ export type DocumentChunk = {
 
 export type VectorStoreAdapter = (
   embedding: number[],
-  options: { matchCount: number; matchThreshold: number }
+  options: { matchCount: number; matchThreshold: number; question?: string }
 ) => Promise<DocumentChunk[]>;
 
 export type RagPipelineConfig = {

@@ -2,6 +2,13 @@
 
 All notable changes to `@hasaan_6/rag-chatbot-widget` are documented in this file.
 
+## [0.3.4] - 2026-07-01
+
+### Added
+- **API Rate-Limiting Backoffs**: Added `fetchWithRetry` helper inside `utils.ts` utilizing exponential retry backoffs, overriding the fetch scope across LLM/Embedding adapters and Supabase queries.
+- **Client-Side Stream Recovery**: Configured the stream reader catch blocks to catch terminations mid-response, appending a connection warning indicator to the partial bubble rather than duplicating bubbles.
+- **Hybrid Keyword fallback**: Programmed vector store adapters to trigger keyword ILIKE fallbacks automatically on vector search threshold misses, ranking matches by query term frequencies with full regex word boundary matching.
+
 ## [0.3.3] - 2026-07-01
 
 ### Added

@@ -1,4 +1,7 @@
 import type { DocumentChunk, VectorStoreAdapter } from "../types";
+import { fetchWithRetry } from "./utils";
+
+const fetch = fetchWithRetry;
 
 function dotProduct(a: number[], b: number[]): number {
   let dot = 0;
@@ -31,7 +34,7 @@ export function createMemoryVectorStore(
   documents: Array<{ content: string; embedding: number[]; metadata?: Record<string, any> }>
 ): VectorStoreAdapter {
   return async (embedding: number[], options) => {
-    const results = documents
+    let results = documents
       .map((doc, index) => {
         const similarity = cosineSimilarity(embedding, doc.embedding);
         return {
@@ -44,6 +47,35 @@ export function createMemoryVectorStore(
       .filter((doc) => doc.similarity >= options.matchThreshold)
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, options.matchCount);
+
+    if (results.length === 0 && options.question) {
+      const stopWords = new Set(["what", "is", "a", "the", "an", "who", "where", "how", "why", "about", "he", "his", "her", "of", "to", "in", "and", "or", "for", "with", "on", "at", "by", "from", "tell", "me", "show", "explain", "describe", "give", "us", "i"]);
+      const queryWords = options.question
+        .toLowerCase()
+        .replace(/[^\w\s]/g, "")
+        .split(/\s+/)
+        .filter((w) => w.length > 1 && !stopWords.has(w));
+
+      if (queryWords.length > 0) {
+        results = documents
+          .map((doc, index) => {
+            const matches = queryWords.filter((w) => 
+              new RegExp(`\\b${w}\\b`, "i").test(doc.content)
+            ).length;
+            return {
+              id: String(index),
+              content: doc.content,
+              metadata: doc.metadata || {},
+              similarity: options.matchThreshold + 0.1,
+              matches,
+            };
+          })
+          .filter((doc) => doc.matches > 0)
+          .sort((a, b) => b.matches - a.matches)
+          .map(({ matches, ...rest }) => rest)
+          .slice(0, options.matchCount);
+      }
+    }
 
     return results;
   };
@@ -77,6 +109,43 @@ export function createSupabaseVectorStore(
       throw new Error(`Supabase search failed: ${response.statusText}`);
     }
 
-    return response.json();
+    const vectorResults = (await response.json()) as DocumentChunk[];
+
+    if (vectorResults.length === 0 && options.question) {
+      const stopWords = new Set(["what", "is", "a", "the", "an", "who", "where", "how", "why", "about", "he", "his", "her", "of", "to", "in", "and", "or", "for", "with", "on", "at", "by", "from", "tell", "me", "show", "explain", "describe", "give", "us", "i"]);
+      const queryWords = options.question
+        .toLowerCase()
+        .replace(/[^\w\s]/g, "")
+        .split(/\s+/)
+        .filter((w) => w.length > 1 && !stopWords.has(w));
+
+      if (queryWords.length > 0) {
+        const filterWords = queryWords.slice(0, 3);
+        const orFilter = filterWords.map(w => `content.ilike.*${encodeURIComponent(w)}*`).join(",");
+        const textUrl = `${supabaseUrl}/rest/v1/documents?select=id,content,metadata&or=(${orFilter})&limit=${options.matchCount}`;
+        const textResponse = await fetch(textUrl, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: supabaseAnonKey,
+            Authorization: `Bearer ${supabaseAnonKey}`,
+          },
+        });
+
+        if (textResponse.ok) {
+          const textDocs = await textResponse.json();
+          if (Array.isArray(textDocs) && textDocs.length > 0) {
+            return textDocs.map((doc, idx) => ({
+              id: doc.id || String(idx),
+              content: doc.content || "",
+              metadata: doc.metadata || {},
+              similarity: options.matchThreshold + 0.1,
+            }));
+          }
+        }
+      }
+    }
+
+    return vectorResults;
   };
 }
