@@ -52,6 +52,7 @@ export type ChatbotWidgetProps = {
   onLeadSubmit?: (values: LeadFormValues) => Promise<void>;
   leadEndpoint?: string;
   persistence?: "none" | "local" | "session";
+  stream?: boolean;
 };
 
 export type ConversationTurn = {
@@ -74,6 +75,7 @@ export type LLMAdapterOutput = {
 
 export type EmbeddingAdapter = (text: string) => Promise<number[]>;
 export type LLMAdapter = (input: LLMAdapterInput) => Promise<LLMAdapterOutput>;
+export type LLMStreamAdapter = (input: LLMAdapterInput) => Promise<ReadableStream<string>>;
 
 export type DocumentChunk = {
   id: string;
@@ -94,6 +96,15 @@ export type VectorStoreAdapter = (
 export type RagPipelineConfig = {
   embeddingAdapter: EmbeddingAdapter;
   llmAdapter: LLMAdapter;
+  vectorStore: VectorStoreAdapter;
+  matchCount?: number;
+  matchThreshold?: number;
+  conversationWindow?: number;
+};
+
+export type RagPipelineStreamConfig = {
+  embeddingAdapter: EmbeddingAdapter;
+  llmStreamAdapter: LLMStreamAdapter;
   vectorStore: VectorStoreAdapter;
   matchCount?: number;
   matchThreshold?: number;

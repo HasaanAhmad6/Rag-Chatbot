@@ -72,6 +72,7 @@ export default function ChatbotWidget({
   onLeadSubmit,
   leadEndpoint,
   persistence = "none",
+  stream = false,
 }: ChatbotWidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -174,21 +175,77 @@ export default function ChatbotWidget({
         throw new Error(`Chat API error: ${response.status}`);
       }
 
-      const result = await response.json();
+      if (stream && response.body) {
+        const assistantMsgId = safeUUID();
+        setMessages((current) => [
+          ...current,
+          { id: assistantMsgId, role: "assistant", content: "" }
+        ]);
 
-      const assistantMessage: ChatMessage = {
-        id: safeUUID(),
-        role: "assistant",
-        content: result.answer || fallbackMsg,
-        needsHumanHandoff: result.needsHumanHandoff,
-        sources: result.sources,
-        suggestedQuestions: result.suggestedQuestions,
-      };
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let answerAccumulator = "";
 
-      setMessages((current) => [...current, assistantMessage]);
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            const cleanLine = line.trim();
+            if (!cleanLine.startsWith("data: ")) continue;
+            try {
+              const data = JSON.parse(cleanLine.slice(6));
+              if (data.type === "token") {
+                answerAccumulator += data.content;
+                setMessages((current) =>
+                  current.map((msg) =>
+                    msg.id === assistantMsgId
+                      ? { ...msg, content: answerAccumulator }
+                      : msg
+                  )
+                );
+              } else if (data.type === "metadata") {
+                setMessages((current) =>
+                  current.map((msg) =>
+                    msg.id === assistantMsgId
+                      ? {
+                          ...msg,
+                          sources: data.sources,
+                          suggestedQuestions: data.suggestedQuestions,
+                          needsHumanHandoff: data.needsHumanHandoff,
+                          content: msg.content || (data.needsHumanHandoff ? "" : fallbackMsg),
+                        }
+                      : msg
+                  )
+                );
+                if (data.needsHumanHandoff) {
+                  setLeadFormOpen(true);
+                }
+              }
+            } catch (err) {
+              // ignore parse errors on stream splits
+            }
+          }
+        }
+      } else {
+        const result = await response.json();
+        const assistantMessage: ChatMessage = {
+          id: safeUUID(),
+          role: "assistant",
+          content: result.answer || fallbackMsg,
+          needsHumanHandoff: result.needsHumanHandoff,
+          sources: result.sources,
+          suggestedQuestions: result.suggestedQuestions,
+        };
 
-      if (assistantMessage.needsHumanHandoff) {
-        setLeadFormOpen(true);
+        setMessages((current) => [...current, assistantMessage]);
+
+        if (assistantMessage.needsHumanHandoff) {
+          setLeadFormOpen(true);
+        }
       }
     } catch (err) {
       console.error("[ChatbotWidget Error]", err);

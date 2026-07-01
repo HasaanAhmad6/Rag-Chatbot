@@ -2,6 +2,14 @@
 
 All notable changes to `@hasaan_6/rag-chatbot-widget` are documented in this file.
 
+## [0.3.2] - 2026-07-01
+
+### Added
+- **Real-Time Token Streaming**: Added full Server-Sent Events (SSE) streaming capabilities to the RAG server pipeline. Exposes `runRagPipelineStream` returning a standard Web `ReadableStream`.
+- **Streaming Adapters**: Implemented `createOpenAICompatibleLLMStream`, `createOpenAILLMStream`, and `createGeminiLLMStream` in `adapterFactories.ts` to fetch and parse live server-sent chunks.
+- **Sliding-Window Token Parser**: Implemented a streaming text transformer `createStreamTransformer` in `ragPipeline.ts` that intercepts and buffers suggestions XML blocks mid-stream, delivering raw text tokens to the UI and a clean structured JSON metadata chunk at the very end of the connection.
+- **Client-Side Stream Reader**: Updated `submitQuestion` in `ChatbotWidget.tsx` to read the streamed response body using reader buffers and update React messages state dynamically as tokens arrive.
+
 ## [0.3.1] - 2026-07-01
 
 ### Added

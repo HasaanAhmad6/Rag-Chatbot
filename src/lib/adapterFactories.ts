@@ -1,4 +1,4 @@
-import type { EmbeddingAdapter, LLMAdapter } from "./adapters";
+import type { EmbeddingAdapter, LLMAdapter, LLMStreamAdapter, LLMAdapterInput, ConversationTurn } from "./adapters";
 
 /** Gemini gemini-embedding-001 (3072 dimensions by default; supports outputDimensionality 128–3072) */
 export function createGeminiEmbeddingAdapter(apiKey: string): EmbeddingAdapter {
@@ -157,5 +157,136 @@ export function createGeminiLLMAdapter(apiKey: string, model = "gemini-2.5-flash
     if (!response.ok) throw new Error(`Gemini LLM request failed: ${response.status}`);
     const data = await response.json();
     return { answer: (data.candidates[0]?.content?.parts[0]?.text ?? "").trim() };
+  };
+}
+
+async function* readChunks(reader: ReadableStreamDefaultReader<Uint8Array>) {
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    for (const line of lines) {
+      yield line;
+    }
+  }
+  if (buffer) yield buffer;
+}
+
+export function createOpenAICompatibleLLMStream(config: {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  temperature?: number;
+  maxTokens?: number;
+}): LLMStreamAdapter {
+  const { apiKey, baseUrl, model, temperature = 0.3, maxTokens = 1024 } = config;
+
+  return async ({ systemPrompt, question, conversation }: LLMAdapterInput) => {
+    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/v1/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature,
+        max_tokens: maxTokens,
+        stream: true,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...conversation,
+          { role: "user", content: question },
+        ],
+      }),
+    });
+
+    if (!response.ok) throw new Error(`LLM stream failed: ${response.status}`);
+    const reader = response.body!.getReader();
+
+    return new ReadableStream<string>({
+      async start(controller) {
+        try {
+          for await (const line of readChunks(reader)) {
+            const cleanLine = line.trim();
+            if (!cleanLine.startsWith("data: ")) continue;
+            const dataStr = cleanLine.slice(6);
+            if (dataStr === "[DONE]") break;
+            try {
+              const parsed = JSON.parse(dataStr);
+              const text = parsed.choices[0]?.delta?.content || "";
+              if (text) {
+                controller.enqueue(text);
+              }
+            } catch (err) {
+              // ignore parse errors
+            }
+          }
+        } catch (err) {
+          controller.error(err);
+        } finally {
+          controller.close();
+        }
+      }
+    });
+  };
+}
+
+export const createOpenAILLMStream = (apiKey: string, model = "gpt-4o-mini") =>
+  createOpenAICompatibleLLMStream({ apiKey, baseUrl: "https://api.openai.com", model });
+
+export function createGeminiLLMStream(apiKey: string, model = "gemini-2.5-flash"): LLMStreamAdapter {
+  return async ({ systemPrompt, question, conversation }: LLMAdapterInput) => {
+    const contents = [
+      ...conversation.map((turn: ConversationTurn) => ({
+        role: turn.role === "assistant" ? "model" : "user",
+        parts: [{ text: turn.content }],
+      })),
+      { role: "user", parts: [{ text: question }] },
+    ];
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          contents,
+        }),
+      }
+    );
+
+    if (!response.ok) throw new Error(`Gemini stream failed: ${response.status}`);
+    const reader = response.body!.getReader();
+
+    return new ReadableStream<string>({
+      async start(controller) {
+        try {
+          for await (const line of readChunks(reader)) {
+            const cleanLine = line.trim();
+            if (!cleanLine.startsWith("data: ")) continue;
+            const dataStr = cleanLine.slice(6);
+            try {
+              const parsed = JSON.parse(dataStr);
+              const text = parsed.candidates[0]?.content?.parts[0]?.text || "";
+              if (text) {
+                controller.enqueue(text);
+              }
+            } catch (err) {
+              // ignore parse errors
+            }
+          }
+        } catch (err) {
+          controller.error(err);
+        } finally {
+          controller.close();
+        }
+      }
+    });
   };
 }

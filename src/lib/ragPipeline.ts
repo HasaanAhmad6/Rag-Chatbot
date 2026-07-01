@@ -1,7 +1,7 @@
-import type { ConversationTurn, EmbeddingAdapter, LLMAdapter } from "./adapters";
-import type { DocumentChunk, RagPipelineConfig, RagPipelineResult, VectorStoreAdapter } from "../types";
+import type { ConversationTurn, EmbeddingAdapter, LLMAdapter, LLMStreamAdapter } from "./adapters";
+import type { DocumentChunk, RagPipelineConfig, RagPipelineResult, VectorStoreAdapter, RagPipelineStreamConfig } from "../types";
 
-export type { ConversationTurn, DocumentChunk, RagPipelineConfig, RagPipelineResult, VectorStoreAdapter };
+export type { ConversationTurn, DocumentChunk, RagPipelineConfig, RagPipelineResult, VectorStoreAdapter, RagPipelineStreamConfig };
 
 const HANDOFF_PHRASES = [
   "i don't have",
@@ -107,4 +107,131 @@ export async function runRagPipeline(
     needsHumanHandoff,
     suggestedQuestions: suggestedQuestions.length > 0 ? suggestedQuestions : undefined,
   };
+}
+
+function createStreamTransformer(
+  sources: Array<{ title: string; url?: string; similarity: number }>,
+  needsHumanHandoffDefault: boolean
+): TransformStream<string, Uint8Array> {
+  let buffer = "";
+  let inSuggestions = false;
+  let suggestionsBuffer = "";
+  let answerAccumulator = "";
+  const encoder = new TextEncoder();
+
+  return new TransformStream<string, Uint8Array>({
+    transform(chunk, controller) {
+      if (inSuggestions) {
+        suggestionsBuffer += chunk;
+      } else {
+        buffer += chunk;
+        const index = buffer.indexOf("<suggestions>");
+        if (index !== -1) {
+          inSuggestions = true;
+          const preText = buffer.slice(0, index);
+          if (preText) {
+            answerAccumulator += preText;
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ type: "token", content: preText })}\n`)
+            );
+          }
+          suggestionsBuffer = buffer.slice(index + "<suggestions>".length);
+          buffer = "";
+        } else {
+          if (buffer.length > 20) {
+            const releaseCount = buffer.length - 20;
+            const releaseText = buffer.slice(0, releaseCount);
+            buffer = buffer.slice(releaseCount);
+            answerAccumulator += releaseText;
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ type: "token", content: releaseText })}\n`)
+            );
+          }
+        }
+      }
+    },
+    flush(controller) {
+      if (!inSuggestions && buffer) {
+        answerAccumulator += buffer;
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: "token", content: buffer })}\n`)
+        );
+      }
+
+      let suggestedQuestions: string[] = [];
+      const suggestionsMatch = suggestionsBuffer.match(/([\s\S]*?)<\/suggestions>/i);
+      const textToParse = suggestionsMatch ? suggestionsMatch[1] : suggestionsBuffer;
+      const suggestMatches = textToParse.match(/<suggest>([\s\S]*?)<\/suggest>/gi);
+      if (suggestMatches) {
+        suggestedQuestions = suggestMatches.map((m) =>
+          m.replace(/<\/?suggest>/gi, "").trim()
+        );
+      }
+
+      const isHandoff = needsHumanHandoffDefault || detectHandoff(answerAccumulator) || !answerAccumulator.trim();
+
+      const metadata = {
+        type: "metadata",
+        sources,
+        needsHumanHandoff: isHandoff,
+        suggestedQuestions: suggestedQuestions.length > 0 ? suggestedQuestions : undefined,
+      };
+
+      controller.enqueue(
+        encoder.encode(`data: ${JSON.stringify(metadata)}\n`)
+      );
+    }
+  });
+}
+
+export async function runRagPipelineStream(
+  question: string,
+  conversation: ConversationTurn[],
+  config: RagPipelineStreamConfig
+): Promise<ReadableStream<Uint8Array>> {
+  const {
+    embeddingAdapter,
+    llmStreamAdapter,
+    vectorStore,
+    matchCount = 8,
+    matchThreshold = 0.5,
+    conversationWindow = 6,
+  } = config;
+
+  const embedding = await embeddingAdapter(question);
+  const chunks = await vectorStore(embedding, { matchCount, matchThreshold });
+
+  const sources = chunks.slice(0, 8).map((chunk) => ({
+    title: chunk.metadata?.title ?? "Source",
+    url: chunk.metadata?.url ?? undefined,
+    similarity: chunk.similarity,
+  }));
+
+  if (chunks.length === 0) {
+    const encoder = new TextEncoder();
+    return new ReadableStream({
+      start(controller) {
+        const metadata = {
+          type: "metadata",
+          sources: [],
+          needsHumanHandoff: true,
+        };
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(metadata)}\n`));
+        controller.close();
+      }
+    });
+  }
+
+  const systemPrompt = buildSystemPrompt(chunks);
+  const recentConversation = conversation.slice(-conversationWindow);
+
+  const rawStream = await llmStreamAdapter({
+    question,
+    context: chunks.map((chunk) => chunk.content).join("\n\n"),
+    conversation: recentConversation,
+    systemPrompt,
+  });
+
+  const transformer = createStreamTransformer(sources, false);
+  return rawStream.pipeThrough(transformer);
 }

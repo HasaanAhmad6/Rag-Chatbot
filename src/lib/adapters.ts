@@ -10,6 +10,7 @@ import type {
   LLMAdapterInput,
   LLMAdapterOutput,
   LLMAdapter,
+  LLMStreamAdapter,
 } from "../types";
 
 export type {
@@ -18,4 +19,5 @@ export type {
   LLMAdapterInput,
   LLMAdapterOutput,
   LLMAdapter,
+  LLMStreamAdapter,
 };
